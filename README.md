@@ -1,2 +1,2 @@
-# SqliteSpliter
-a sqlite based database daily spliter.
+# SqliteSplitter
+a sqlite based database daily splitter.
