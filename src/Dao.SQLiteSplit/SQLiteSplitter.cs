@@ -25,12 +25,12 @@ namespace Dao.SQLiteSplit
                 throw new ArgumentNullException(nameof(SQLiteDBProvider));
         }
 
-        #region Insert
+        #region Execute
 
-        public async Task<ICollection<TEntity>> InsertAsync<TEntity>(string sql, ICollection<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
+        public async Task ExecuteAsync<TEntity>(string sql, ICollection<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
         {
             if (entities == null || entities.Count <= 0)
-                return entities;
+                return;
 
             if (now == null)
                 now = DateTime.Now;
@@ -95,8 +95,11 @@ namespace Dao.SQLiteSplit
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] InsertAsync Release DBDeletionLocks.ReaderLockAsync");
             }
+        }
 
-            return entities;
+        public void Execute<TEntity>(string sql, ICollection<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
+        {
+            ExecuteAsync(sql, entities, actionUpdateInsertedId, now).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         #endregion
@@ -178,6 +181,11 @@ namespace Dao.SQLiteSplit
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Release DBDeletionLocks.ReaderLockAsync");
                 return result;
             }
+        }
+
+        public QueryResult<TResult> Query<TParameter, TResult>(SQLQuery<TParameter> query, QueryPage page, ISQLiteQueryProvider queryProvider = null)
+        {
+            return QueryAsync<TParameter, TResult>(query, page, queryProvider).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         #endregion

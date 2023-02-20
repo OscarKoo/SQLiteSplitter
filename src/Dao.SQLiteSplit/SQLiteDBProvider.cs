@@ -106,16 +106,11 @@ namespace Dao.SQLiteSplit
 
         #endregion
 
-        public abstract bool ShouldDeleteDBFile(string file, DateTime beforeDate);
+        public abstract bool IsExpiredDB(string file, DateTime beforeDate);
 
         #region DeleteDBs
 
         DateTime lastDeleted;
-
-        bool RequireDeletion(DateTime now)
-        {
-            return this.lastDeleted.Date < now.Date;
-        }
 
         static DateTime CalculateBeforeDate(DateTime now)
         {
@@ -132,7 +127,7 @@ namespace Dao.SQLiteSplit
             if (!showAll && SQLiteSplitter.SQLiteSettings.KeepDays >= 0)
             {
                 var beforeDate = CalculateBeforeDate(now);
-                files = files.Where(w => !ShouldDeleteDBFile(w, beforeDate));
+                files = files.Where(w => !IsExpiredDB(w, beforeDate));
             }
 
             if (orderBy != null)
@@ -176,7 +171,7 @@ namespace Dao.SQLiteSplit
                         ClearRowCountCache();
 
                         if (SQLiteSplitter.SQLiteSettings.DeleteMode == DeleteMode.Physical)
-                            Parallel.ForEach(GetDBs(now, true).Where(w => ShouldDeleteDBFile(w, beforeDate)), File.Delete);
+                            Parallel.ForEach(GetDBs(now, true).Where(w => IsExpiredDB(w, beforeDate)), File.Delete);
 
                         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] DeleteExpiredDBs Release DBDeletionLocks.WriterLock");
                     }
