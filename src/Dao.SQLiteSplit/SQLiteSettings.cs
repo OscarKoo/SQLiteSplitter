@@ -1,4 +1,4 @@
-﻿namespace Dao.SQLiteSplitter
+﻿namespace Dao.SQLiteSplit
 {
     public class SQLiteSettings
     {

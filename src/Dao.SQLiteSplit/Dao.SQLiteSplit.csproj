@@ -10,6 +10,10 @@
     <PackageTags>simple SQLite database daily splitter</PackageTags>
     <PackageLicenseUrl>https://github.com/OscarKoo/SQLiteSplitter/blob/master/LICENSE</PackageLicenseUrl>
     <PackageIconUrl>https://raw.githubusercontent.com/OscarKoo/SQLiteSplitter/master/favicon.ico</PackageIconUrl>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Dao.SQLiteSplitter</PackageId>
+    <Product>Dao.SQLiteSplitter</Product>
+    <AssemblyName>Dao.SQLiteSplitter</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

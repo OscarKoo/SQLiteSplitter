@@ -12,7 +12,7 @@ using Dao.ConcurrentDictionaryLazy;
 using Dao.IndividualReadWriteLocks;
 using Nito.AsyncEx;
 
-namespace Dao.SQLiteSplitter
+namespace Dao.SQLiteSplit
 {
     public abstract class SQLiteDBProvider
     {
@@ -64,39 +64,37 @@ namespace Dao.SQLiteSplitter
         public async Task CreateDB(DateTime now)
         {
             var file = GenerateDBFile(now);
-            if (File.Exists(file))
-                return;
 
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Require Lock");
             using (await this.DBDeletionLocks.ReaderLockAsync().ConfigureAwait(false))
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Get DBDeletionLocks.ReaderLock");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Got DBDeletionLocks.ReaderLock");
 
                 using (await this.DBLocks.WriterLockAsync(file).ConfigureAwait(false))
                 {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Get DBLocks.WriterLock");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Got DBLocks.WriterLock");
 
-                    var dir = Path.GetDirectoryName(file);
-                    if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
-                        Directory.CreateDirectory(dir);
-
-                    if (File.Exists(file))
-                        return;
-
-                    try
+                    if (!File.Exists(file))
                     {
-                        using (File.Create(file)) { }
+                        var dir = Path.GetDirectoryName(file);
+                        if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+                            Directory.CreateDirectory(dir);
 
-                        using (var conn = new SQLiteConnection(GenerateConnectionString(file)))
+                        try
                         {
-                            await CreateDBSchema(conn).ConfigureAwait(false);
+                            using (File.Create(file)) { }
+
+                            using (var conn = new SQLiteConnection(GenerateConnectionString(file)))
+                            {
+                                await CreateDBSchema(conn).ConfigureAwait(false);
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        if (File.Exists(file))
-                            File.Delete(file);
-                        throw;
+                        catch (Exception ex)
+                        {
+                            if (File.Exists(file))
+                                File.Delete(file);
+                            throw;
+                        }
                     }
 
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] CreateDB Release DBLocks.WriterLock");
@@ -112,12 +110,11 @@ namespace Dao.SQLiteSplitter
 
         #region DeleteDBs
 
-        volatile bool isDeleting;
         DateTime lastDeleted;
 
         bool RequireDeletion(DateTime now)
         {
-            return !this.isDeleting && this.lastDeleted.Date < now.Date;
+            return this.lastDeleted.Date < now.Date;
         }
 
         static DateTime CalculateBeforeDate(DateTime now)
@@ -159,15 +156,13 @@ namespace Dao.SQLiteSplitter
             if (SQLiteSplitter.SQLiteSettings.KeepDays < 0)
                 return;
 
-            if (!RequireDeletion(now))
+            if (this.lastDeleted.Date >= now.Date)
                 return;
 
             lock (this.DBDeletionLocks)
             {
-                if (!RequireDeletion(now))
+                if (this.lastDeleted.Date >= now.Date)
                     return;
-
-                this.isDeleting = true;
 
                 try
                 {
@@ -176,18 +171,19 @@ namespace Dao.SQLiteSplitter
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] DeleteExpiredDBs Require Lock");
                     using (this.DBDeletionLocks.WriterLock())
                     {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] DeleteExpiredDBs Get DeleteExpiredDBs DBDeletionLocks.WriterLock");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] DeleteExpiredDBs Got DBDeletionLocks.WriterLock");
 
                         ClearRowCountCache();
 
                         if (SQLiteSplitter.SQLiteSettings.DeleteMode == DeleteMode.Physical)
                             Parallel.ForEach(GetDBs(now, true).Where(w => ShouldDeleteDBFile(w, beforeDate)), File.Delete);
+
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] DeleteExpiredDBs Release DBDeletionLocks.WriterLock");
                     }
                 }
                 finally
                 {
                     this.lastDeleted = now.Date;
-                    this.isDeleting = false;
                 }
             }
         }

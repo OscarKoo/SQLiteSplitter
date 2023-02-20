@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SQLite;
 using System.Diagnostics;
 using System.Linq;
@@ -7,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 
-namespace Dao.SQLiteSplitter
+namespace Dao.SQLiteSplit
 {
     public class SQLiteSplitter
     {
@@ -26,8 +27,11 @@ namespace Dao.SQLiteSplitter
 
         #region Insert
 
-        public async Task<IEnumerable<TEntity>> InsertAsync<TEntity>(string sql, IEnumerable<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
+        public async Task<ICollection<TEntity>> InsertAsync<TEntity>(string sql, ICollection<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
         {
+            if (entities == null || entities.Count <= 0)
+                return entities;
+
             if (now == null)
                 now = DateTime.Now;
 
@@ -50,9 +54,12 @@ namespace Dao.SQLiteSplitter
                         sql += ";select last_insert_rowid()";
 
                     var inserted = false;
-                    try
+                    using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(file)))
                     {
-                        using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(file)))
+                        if (conn.State == ConnectionState.Closed)
+                            await conn.OpenAsync().ConfigureAwait(false);
+                        var tran = conn.BeginTransaction();
+                        try
                         {
                             foreach (var entity in entities)
                             {
@@ -68,17 +75,28 @@ namespace Dao.SQLiteSplitter
                                     inserted = true;
                                 }
                             }
+
+                            tran?.Commit();
+                        }
+                        catch (Exception ex)
+                        {
+                            tran?.Rollback();
+                            throw;
+                        }
+                        finally
+                        {
+                            if (inserted)
+                                SQLiteDBProvider.ClearRowCountCache(file);
                         }
                     }
-                    finally
-                    {
-                        if (inserted)
-                            SQLiteDBProvider.ClearRowCountCache(file);
-                    }
 
-                    return entities;
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] InsertAsync Release DBLocks.WriterLockAsync");
                 }
+
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] InsertAsync Release DBDeletionLocks.ReaderLockAsync");
             }
+
+            return entities;
         }
 
         #endregion
@@ -89,9 +107,9 @@ namespace Dao.SQLiteSplitter
         {
             await files.ParallelForEachAsync(async f =>
             {
-                using (SQLiteDBProvider.DBLocks.ReaderLock(f.File))
+                using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
                 {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Get DBLocks.ReaderLock");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Got DBLocks.ReaderLockAsync");
 
                     f.Rows = await SQLiteDBProvider.GetOrAddRowCountCache(f.File, sql.ToSymbol(), async k =>
                     {
@@ -100,6 +118,8 @@ namespace Dao.SQLiteSplitter
                             return await conn.QuerySingleAsync<CountMax>(sql.ToCountMaxSQL(), sql.Parameter).ConfigureAwait(false);
                         }
                     }).ConfigureAwait(false);
+
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Release DBLocks.ReaderLockAsync");
                 }
             }).ConfigureAwait(false);
         }
@@ -111,12 +131,14 @@ namespace Dao.SQLiteSplitter
             {
                 using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
                 {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Get DBLocks.ReaderLock");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Got DBLocks.ReaderLockAsync");
 
                     using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
                     {
                         f.Data = (await conn.QueryAsync<TResult>(query.ToQuerySQL(f.Rows.Max, f.TakeRows, f.SkipRows), query.Parameter).ConfigureAwait(false)).AsList();
                     }
+
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Release DBLocks.ReaderLockAsync");
                 }
             }).ConfigureAwait(false);
 
@@ -137,7 +159,7 @@ namespace Dao.SQLiteSplitter
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Require Lock");
             using (await SQLiteDBProvider.DBDeletionLocks.ReaderLockAsync().ConfigureAwait(false))
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Get DBDeletionLocks.ReaderLockAsync");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Got DBDeletionLocks.ReaderLockAsync");
 
                 var files = SQLiteDBProvider.GetDBs(now, false, queryProvider.GetDBsOrderBy).Select(s => new DBFileInfo<TResult>(s)).ToList();
 
@@ -152,6 +174,8 @@ namespace Dao.SQLiteSplitter
                     Data = data,
                     Total = files.Sum(s => s.Rows.Count)
                 };
+
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Release DBDeletionLocks.ReaderLockAsync");
                 return result;
             }
         }

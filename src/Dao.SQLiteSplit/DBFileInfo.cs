@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Dao.SQLiteSplitter
+namespace Dao.SQLiteSplit
 {
     public class DBFileInfo
     {

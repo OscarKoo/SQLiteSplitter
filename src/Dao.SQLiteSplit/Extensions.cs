@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-namespace Dao.SQLiteSplitter
+namespace Dao.SQLiteSplit
 {
     public static class Extensions
     {
