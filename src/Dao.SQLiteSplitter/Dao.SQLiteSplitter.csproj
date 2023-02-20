@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>NET45;</TargetFrameworks>
+    <Authors>Oscar Koo</Authors>
+    <Copyright>Copyright 2023 Oscar Koo</Copyright>
+    <Description>a simple SQLite based database daily splitter library</Description>
+    <PackageProjectUrl>https://github.com/OscarKoo/SQLiteSplitter</PackageProjectUrl>
+    <RepositoryUrl></RepositoryUrl>
+    <PackageTags>simple SQLite database daily splitter</PackageTags>
+    <PackageLicenseUrl>https://github.com/OscarKoo/SQLiteSplitter/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageIconUrl>https://raw.githubusercontent.com/OscarKoo/SQLiteSplitter/master/favicon.ico</PackageIconUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dao.ConcurrentDictionaryLazy" Version="1.3.4" />
+    <PackageReference Include="Dao.IndividualReadWriteLock" Version="1.0.2" />
+    <PackageReference Include="Dapper" Version="1.50.2" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.117" />
+    <PackageReference Include="System.Threading.Tasks.Dataflow" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>
