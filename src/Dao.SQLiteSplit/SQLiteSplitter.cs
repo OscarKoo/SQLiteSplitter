@@ -58,20 +58,20 @@ namespace Dao.SQLiteSplit
                     {
                         if (conn.State == ConnectionState.Closed)
                             await conn.OpenAsync().ConfigureAwait(false);
-                        var tran = conn.BeginTransaction();
+                        var tran = entities.Count > 1 ? conn.BeginTransaction() : null;
                         try
                         {
                             foreach (var entity in entities)
                             {
                                 if (actionUpdateInsertedId != null)
                                 {
-                                    var lastId = await conn.ExecuteScalarAsync<long>(sql, entity).ConfigureAwait(false);
+                                    var lastId = await conn.ExecuteScalarAsync<long>(sql, entity, tran).ConfigureAwait(false);
                                     inserted = true;
                                     actionUpdateInsertedId(entity, lastId);
                                 }
                                 else
                                 {
-                                    await conn.ExecuteAsync(sql, entity).ConfigureAwait(false);
+                                    await conn.ExecuteAsync(sql, entity, tran).ConfigureAwait(false);
                                     inserted = true;
                                 }
                             }
@@ -97,9 +97,29 @@ namespace Dao.SQLiteSplit
             }
         }
 
+        public async Task ExecuteAsync<TEntity>(string sql, TEntity entity, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
+        {
+            await ExecuteAsync(sql, new[] { entity }, actionUpdateInsertedId, now).ConfigureAwait(false);
+        }
+
+        public async Task ExecuteAsync(string sql, DateTime? now = null)
+        {
+            await ExecuteAsync(sql, (object)null, null, now).ConfigureAwait(false);
+        }
+
         public void Execute<TEntity>(string sql, ICollection<TEntity> entities, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
         {
             ExecuteAsync(sql, entities, actionUpdateInsertedId, now).ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+
+        public void Execute<TEntity>(string sql, TEntity entity, Action<TEntity, long> actionUpdateInsertedId = null, DateTime? now = null)
+        {
+            ExecuteAsync(sql, entity, actionUpdateInsertedId, now).ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+
+        public void Execute(string sql, DateTime? now = null)
+        {
+            ExecuteAsync(sql, now).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         #endregion
