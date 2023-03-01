@@ -130,19 +130,26 @@ namespace Dao.SQLiteSplit
         {
             await files.ParallelForEachAsync(async f =>
             {
-                using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
+                try
                 {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Got DBLocks.ReaderLockAsync");
-
-                    f.Rows = await SQLiteDBProvider.GetOrAddRowCountCache(f.File, sql.ToSymbol(), async k =>
+                    using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
                     {
-                        using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
-                        {
-                            return await conn.QuerySingleAsync<CountMax>(sql.ToCountMaxSQL(), sql.Parameter).ConfigureAwait(false);
-                        }
-                    }).ConfigureAwait(false);
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Got DBLocks.ReaderLockAsync");
 
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Release DBLocks.ReaderLockAsync");
+                        f.Rows = await SQLiteDBProvider.GetOrAddRowCountCache(f.File, sql.ToSymbol(), async k =>
+                        {
+                            using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
+                            {
+                                return await conn.QuerySingleAsync<CountMax>(sql.ToCountMaxSQL(), sql.Parameter).ConfigureAwait(false);
+                            }
+                        }).ConfigureAwait(false);
+
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryCountMax Release DBLocks.ReaderLockAsync");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Counting ({f.File}) failed", ex);
                 }
             }).ConfigureAwait(false);
         }
@@ -152,16 +159,23 @@ namespace Dao.SQLiteSplit
             var affected = files.Where(w => w.IsAffected).ToList();
             await affected.ParallelForEachAsync(async f =>
             {
-                using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
+                try
                 {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Got DBLocks.ReaderLockAsync");
-
-                    using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
+                    using (await SQLiteDBProvider.DBLocks.ReaderLockAsync(f.File).ConfigureAwait(false))
                     {
-                        f.Data = (await conn.QueryAsync<TResult>(query.ToQuerySQL(f.Rows.Max, f.TakeRows, f.SkipRows), query.Parameter).ConfigureAwait(false)).AsList();
-                    }
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Got DBLocks.ReaderLockAsync");
 
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Release DBLocks.ReaderLockAsync");
+                        using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
+                        {
+                            f.Data = (await conn.QueryAsync<TResult>(query.ToQuerySQL(f.Rows.Max, f.TakeRows, f.SkipRows), query.Parameter).ConfigureAwait(false)).AsList();
+                        }
+
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAffectedDBs Release DBLocks.ReaderLockAsync");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Querying ({f.File}) failed", ex);
                 }
             }).ConfigureAwait(false);
 
