@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace Dao.SQLiteSplit
 {
@@ -6,14 +8,25 @@ namespace Dao.SQLiteSplit
     {
         OrderBy GetDBsOrderBy { get; }
 
+        Func<string, bool> GetDBsFilter { get; set; }
+
+        bool ShouldQueryMaxId(string file, DateTime now);
+
         void FindAffectedDBs(IEnumerable<DBFileInfo> files, QueryPage page);
     }
 
     public class SQLiteQueryProviderDefault : ISQLiteQueryProvider
     {
-        public OrderBy GetDBsOrderBy => OrderBy.Descending;
+        public virtual OrderBy GetDBsOrderBy => OrderBy.Descending;
 
-        public void FindAffectedDBs(IEnumerable<DBFileInfo> files, QueryPage page)
+        public virtual Func<string, bool> GetDBsFilter { get; set; }
+
+        public virtual bool ShouldQueryMaxId(string file, DateTime now)
+        {
+            return DateTime.Parse(Path.GetFileNameWithoutExtension(file)).Date >= now.Date;
+        }
+
+        public virtual void FindAffectedDBs(IEnumerable<DBFileInfo> files, QueryPage page)
         {
             long skip = (page.Index - 1) * page.Size;
             var size = page.Size;

@@ -4,14 +4,12 @@ namespace Dao.SQLiteSplit
 {
     public class DBFileInfo
     {
-        public DBFileInfo() { }
-
         public DBFileInfo(string file)
         {
             File = file;
         }
 
-        public string File { get; set; }
+        public string File { get; }
 
         public CountMax Rows { get; set; }
 
@@ -22,8 +20,6 @@ namespace Dao.SQLiteSplit
 
     public class DBFileInfo<TResult> : DBFileInfo
     {
-        public DBFileInfo() : base() { }
-
         public DBFileInfo(string file) : base(file) { }
 
         public List<TResult> Data { get; set; }

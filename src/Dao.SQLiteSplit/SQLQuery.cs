@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -10,7 +8,6 @@ namespace Dao.SQLiteSplit
 {
     public class SQLQuery
     {
-        protected static readonly ConcurrentDictionary<Type, PropertyInfo[]> propertyInfos = new ConcurrentDictionary<Type, PropertyInfo[]>();
         protected static readonly ConcurrentDictionary<string, Regex> regexCache = new ConcurrentDictionary<string, Regex>(StringComparer.Ordinal);
     }
 
@@ -41,9 +38,7 @@ namespace Dao.SQLiteSplit
             if (string.IsNullOrWhiteSpace(Where) || Parameter == null || Where.IndexOf("@", StringComparison.Ordinal) < 0)
                 return Where;
 
-            var pis = propertyInfos.GetOrAdd(Parameter.GetType(), k => k.GetProperties());
-
-            var where = pis
+            var where = Parameter.GetType().GetProperties()
                 .Where(w => w.CanRead && CreateParameterRegex(w.Name).IsMatch(Where))
                 .Aggregate(Where, (current, pi) => CreateParameterRegex(pi.Name).Replace(current, pi.GetValue(Parameter).ToString()));
             return where;
@@ -73,34 +68,32 @@ namespace Dao.SQLiteSplit
 
         #region CountMax
 
-        readonly object syncCountMax = new object();
-        string countMax;
+        readonly ConcurrentDictionary<bool, string> countMax = new ConcurrentDictionary<bool, string>();
 
-        public string ToCountMaxSQL()
+        string ToCountMaxSQLCore(bool queryMax)
         {
-            if (!string.IsNullOrWhiteSpace(this.countMax))
-                return this.countMax;
+            var sb = new StringBuilder();
+            sb.Append($"{nameof(Select)} (");
+            sb.Append($"{nameof(Select)} count(*) ");
+            sb.Append($"{nameof(From)} {From} ");
+            if (!string.IsNullOrWhiteSpace(Where))
+                sb.Append($"{nameof(Where)} {Where} ");
+            sb.Append(") as Count");
 
-            lock (this.syncCountMax)
+            if (queryMax && !string.IsNullOrWhiteSpace(MaxIdColumnName))
             {
-                if (!string.IsNullOrWhiteSpace(this.countMax))
-                    return this.countMax;
-
-                var sb = new StringBuilder();
-
-                var select = new List<string>();
-                select.Add("count(*) as Count");
-                if (!string.IsNullOrWhiteSpace(MaxIdColumnName))
-                    select.Add($"max({MaxIdColumnName}) as Max");
-
-                sb.Append($"{nameof(Select)} {string.Join(", ", select)} ");
+                sb.Append(", (");
+                sb.Append($"{nameof(Select)} max({MaxIdColumnName}) ");
                 sb.Append($"{nameof(From)} {From} ");
-                if (!string.IsNullOrWhiteSpace(Where))
-                    sb.Append($"{nameof(Where)} {Where} ");
-
-                this.countMax = sb.ToString();
-                return this.countMax;
+                sb.Append(") as Max");
             }
+
+            return sb.ToString();
+        }
+
+        public string ToCountMaxSQL(bool queryMax)
+        {
+            return this.countMax.GetOrAdd(queryMax, ToCountMaxSQLCore);
         }
 
         #endregion
@@ -119,8 +112,11 @@ namespace Dao.SQLiteSplit
                 where += $"{MaxIdColumnName} <= {maxId}";
             }
 
-            sb.Append($"{nameof(Where)} {where} ");
-            sb.Append($"ORDER BY {OrderBy} ");
+            if (!string.IsNullOrWhiteSpace(where))
+                sb.Append($"{nameof(Where)} {where} ");
+
+            if (!string.IsNullOrWhiteSpace(OrderBy))
+                sb.Append($"ORDER BY {OrderBy} ");
 
             if (takeRows > 0)
             {

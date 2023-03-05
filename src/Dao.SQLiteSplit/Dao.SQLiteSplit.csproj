@@ -14,7 +14,7 @@
     <PackageId>Dao.SQLiteSplitter</PackageId>
     <Product>Dao.SQLiteSplitter</Product>
     <AssemblyName>Dao.SQLiteSplitter</AssemblyName>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
   </PropertyGroup>
 
   <ItemGroup>

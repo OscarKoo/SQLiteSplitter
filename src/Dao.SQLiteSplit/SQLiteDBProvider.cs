@@ -89,7 +89,7 @@ namespace Dao.SQLiteSplit
                                 await CreateDBSchema(conn).ConfigureAwait(false);
                             }
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             if (File.Exists(file))
                                 File.Delete(file);

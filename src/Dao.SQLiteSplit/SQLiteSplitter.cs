@@ -78,7 +78,7 @@ namespace Dao.SQLiteSplit
 
                             tran?.Commit();
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             tran?.Rollback();
                             throw;
@@ -126,7 +126,7 @@ namespace Dao.SQLiteSplit
 
         #region Query
 
-        static async Task QueryCountMax<TParameter>(ICollection<DBFileInfo> files, SQLQuery<TParameter> sql)
+        static async Task QueryCountMax<TParameter>(IEnumerable<DBFileInfo> files, SQLQuery<TParameter> sql, ISQLiteQueryProvider queryProvider, DateTime now)
         {
             await files.ParallelForEachAsync(async f =>
             {
@@ -140,7 +140,7 @@ namespace Dao.SQLiteSplit
                         {
                             using (var conn = new SQLiteConnection(SQLiteDBProvider.GenerateConnectionString(f.File)))
                             {
-                                return await conn.QuerySingleAsync<CountMax>(sql.ToCountMaxSQL(), sql.Parameter).ConfigureAwait(false);
+                                return await conn.QuerySingleAsync<CountMax>(sql.ToCountMaxSQL(queryProvider.ShouldQueryMaxId(f.File, now)), sql.Parameter).ConfigureAwait(false);
                             }
                         }).ConfigureAwait(false);
 
@@ -185,7 +185,7 @@ namespace Dao.SQLiteSplit
 
         public async Task<QueryResult<TResult>> QueryAsync<TParameter, TResult>(SQLQuery<TParameter> query, QueryPage page, ISQLiteQueryProvider queryProvider = null)
         {
-            var now = DateTime.Now.Date;
+            var now = DateTime.Now;
 
             CheckDependency();
             SQLiteDBProvider.DeleteExpiredDBs(now);
@@ -198,9 +198,12 @@ namespace Dao.SQLiteSplit
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fffffff} ({Thread.CurrentThread.ManagedThreadId})] QueryAsync Got DBDeletionLocks.ReaderLockAsync");
 
-                var files = SQLiteDBProvider.GetDBs(now, false, queryProvider.GetDBsOrderBy).Select(s => new DBFileInfo<TResult>(s)).ToList();
+                var enumFiles = SQLiteDBProvider.GetDBs(now, false, queryProvider.GetDBsOrderBy);
+                if (queryProvider.GetDBsFilter != null)
+                    enumFiles = enumFiles.Where(queryProvider.GetDBsFilter);
+                var files = enumFiles.Select(s => new DBFileInfo<TResult>(s)).ToList();
 
-                await QueryCountMax(files.Cast<DBFileInfo>().ToList(), query).ConfigureAwait(false);
+                await QueryCountMax(files, query, queryProvider, now).ConfigureAwait(false);
 
                 queryProvider.FindAffectedDBs(files, page);
 
