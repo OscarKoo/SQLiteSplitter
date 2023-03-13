@@ -8,7 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Dao.ConcurrentDictionaryLazy;
+using Dao.ConcurrentDictionaryLazyAsync;
 using Dao.IndividualReadWriteLocks;
 using Nito.AsyncEx;
 
@@ -21,12 +21,12 @@ namespace Dao.SQLiteSplit
 
         #region RowCountCache
 
-        protected readonly ConcurrentDictionary<string, ConcurrentDictionaryLazy<string, CountMax>> rowCountCache = new ConcurrentDictionary<string, ConcurrentDictionaryLazy<string, CountMax>>(StringComparer.OrdinalIgnoreCase);
+        protected readonly ConcurrentDictionary<string, ConcurrentDictionaryLazyAsync<string, CountMax>> rowCountCache = new ConcurrentDictionary<string, ConcurrentDictionaryLazyAsync<string, CountMax>>(StringComparer.OrdinalIgnoreCase);
 
         public async Task<CountMax> GetOrAddRowCountCache(string file, string key, Func<string, Task<CountMax>> queryCount)
         {
             return await this.rowCountCache
-                .GetOrAdd(file, k => new ConcurrentDictionaryLazy<string, CountMax>(StringComparer.OrdinalIgnoreCase))
+                .GetOrAdd(file, k => new ConcurrentDictionaryLazyAsync<string, CountMax>(StringComparer.OrdinalIgnoreCase))
                 .GetOrAddAsync(key, async k => await queryCount(k).ConfigureAwait(false)).ConfigureAwait(false);
         }
 
